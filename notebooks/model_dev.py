@@ -28,19 +28,14 @@ from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, ClassifierMixin
 from imblearn.over_sampling import SMOTE
 
-try:
-    from xgboost import XGBClassifier
-    HAS_XGB = True
-except ImportError:
-    HAS_XGB = False
-    print("⚠️  XGBoost not installed — skipping XGB model")
+
 
 from utils.data_loader import (
     load_all_csvs, generate_synthetic_cwc, preprocess,
     CORE_FEATURES
 )
 
-from utils.model_utils import SoftVotingHybrid
+
 
 MODELS_DIR  = os.path.join(os.path.dirname(__file__), "..", "models")
 FIGURES_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
@@ -189,84 +184,8 @@ joblib.dump({"model": pipe_rf, "features": all_features, "target": TARGET,
 print("✅  rf_full.pkl saved")
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# MODEL 2 — XGBoost (Full)
-# ════════════════════════════════════════════════════════════════════════════
-if HAS_XGB:
-    xgb = XGBClassifier(
-        n_estimators=200, max_depth=6, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8,
-        use_label_encoder=False, eval_metric="logloss",
-        scale_pos_weight=(y == 0).sum() / (y == 1).sum(),
-        random_state=42, n_jobs=-1)
-
-    pipe_xgb = build_pipeline(xgb)
-    cv_xgb = evaluate_model(pipe_xgb, X_full, y, "XGBoost (Full Features)")
-
-    plot_confusion_matrix(
-        build_pipeline(XGBClassifier(n_estimators=200, max_depth=6,
-                                      learning_rate=0.05, use_label_encoder=False,
-                                      eval_metric="logloss", random_state=42)),
-        X_full, y, "XGB Full",
-        f"{FIGURES_DIR}/cm_xgb_full.png")
-    print("✅  cm_xgb_full.png")
-
-    pipe_xgb.fit(X_full, y)
-    joblib.dump({"model": pipe_xgb, "features": all_features, "target": TARGET,
-                 "type": "full", "algo": "XGBoost"},
-                f"{MODELS_DIR}/xgb_full.pkl")
-    print("✅  xgb_full.pkl saved")
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# MODEL 3 — Soft Hybrid (RF + XGB Ensemble)
-# ════════════════════════════════════════════════════════════════════════════
-if HAS_XGB:
-    # Use trained model pipelines to create hybrid
-    hybrid_model = SoftVotingHybrid(pipe_rf, pipe_xgb)
-    
-    # Evaluate hybrid on test split
-    from sklearn.model_selection import train_test_split
-    X_tr, X_te, y_tr, y_te = train_test_split(X_full, y, test_size=0.2,
-                                               random_state=42, stratify=y)
-    hybrid_model.fit(X_tr, y_tr)
-    
-    # Get predictions and metrics
-    y_pred_hybrid = hybrid_model.predict(X_te)
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-    acc_hybrid = accuracy_score(y_te, y_pred_hybrid)
-    f1_hybrid = f1_score(y_te, y_pred_hybrid, average='weighted')
-    auc_hybrid = roc_auc_score(y_te, hybrid_model.predict_proba(X_te)[:, 1])
-    
-    print(f"\n{'='*50}")
-    print(f"  Soft Hybrid (RF + XGB)")
-    print(f"{'='*50}")
-    print(f"  accuracy          : {acc_hybrid:.4f}")
-    print(f"  f1_weighted       : {f1_hybrid:.4f}")
-    print(f"  roc_auc           : {auc_hybrid:.4f}")
-    print(f"  Classification report:\n{classification_report(y_te, y_pred_hybrid, target_names=['Unsafe','Safe'])}")
-    
-    # Create CV-compatible results for summary
-    cv_hybrid = {
-        'test_accuracy': np.array([acc_hybrid]),
-        'test_f1_weighted': np.array([f1_hybrid]),
-        'test_roc_auc': np.array([auc_hybrid]),
-    }
-    
-    # Plot confusion matrix
-    cm = confusion_matrix(y_te, y_pred_hybrid)
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ConfusionMatrixDisplay(cm, display_labels=["Unsafe", "Safe"]).plot(ax=ax, cmap="Blues")
-    ax.set_title(f"Confusion Matrix — Soft Hybrid")
-    fig.savefig(f"{FIGURES_DIR}/cm_hybrid_soft.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    print("✅  cm_hybrid_soft.png")
-    
-    # Save hybrid model
-    joblib.dump({"model": hybrid_model, "features": all_features, "target": TARGET,
-                 "type": "hybrid", "algo": "SoftVoting(RF+XGB)"},
-                f"{MODELS_DIR}/hybrid_soft.pkl")
-    print("✅  hybrid_soft.pkl saved")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -283,14 +202,9 @@ def extract_cv(cv_results):
         "AUC-ROC":  f"{cv_results['test_roc_auc'].mean():.4f} ± {cv_results['test_roc_auc'].std():.4f}",
         "Features": len(all_features),
     }
-
 rows = [
-    {"Model": "RF Full (Main)",  **{k: v for k, v in extract_cv(cv_rf).items()}},
+    {"Model": "RF Full (Main)", **{k: v for k, v in extract_cv(cv_rf).items()}}
 ]
-if HAS_XGB:
-    rows.insert(1, {"Model": "XGB Full", **{k: v for k, v in extract_cv(cv_xgb).items()}})
-    if 'cv_hybrid' in locals():
-        rows.insert(2, {"Model": "Soft Hybrid", **{k: v for k, v in extract_cv(cv_hybrid).items()}})
 
 summary = pd.DataFrame(rows)
 print(summary.to_string(index=False))
