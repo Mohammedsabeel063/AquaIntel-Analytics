@@ -376,8 +376,47 @@ filt = apply_filters(df, sel_states, sel_years, wqi_range, search_query)
 plot_df = filt.sample(min(3000, len(filt)), random_state=42)
 
 
+# ─── Sidebar ─────────────────────────────────────────────────
+st.sidebar.header("🎛️ Quick Navigation")
+
+# Quick navigation
+st.sidebar.markdown("### 📊 Dashboard Tabs")
+st.sidebar.info("Use the tabs above for full analysis")
+
+# Quick Stats
+st.sidebar.markdown("### 📈 Quick Stats")
+st.sidebar.metric("Total Records", f"{len(filt):,}")
+st.sidebar.metric("Safe Stations", f"{filt['is_safe'].sum() if 'is_safe' in filt.columns else 0}")
+st.sidebar.metric("Mean WQI", f"{filt['WQI'].mean():.2f}" if 'WQI' in filt.columns else "N/A")
+
+# Quick Prediction
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔮 Quick Prediction")
+st.sidebar.info("For detailed prediction, use the Predict tab")
+
+if 'pH' in CORE_FEATURES:
+    quick_ph = st.sidebar.slider("pH Level", 0.0, 14.0, 7.0, 0.1)
+    quick_do = st.sidebar.slider("Dissolved Oxygen", 0.0, 15.0, 5.0, 0.1)
+    
+    if st.sidebar.button("Quick Predict"):
+        # Simple rule-based prediction
+        if quick_ph >= 6.5 and quick_ph <= 8.5 and quick_do >= 5.0:
+            st.sidebar.success("✅ Water Quality: **GOOD**")
+        elif quick_ph >= 6.0 and quick_ph <= 9.0 and quick_do >= 3.0:
+            st.sidebar.warning("⚠️ Water Quality: **MODERATE**")
+        else:
+            st.sidebar.error("🚨 Water Quality: **POOR**")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ℹ️ About")
+st.sidebar.markdown("**AquaIntel Analytics**")
+st.sidebar.markdown("Real-time water quality analysis and prediction system")
+st.sidebar.markdown(f"**Source:** {source}")
+
+
 # ─── Header ─────────────────────────────────────────────────
 st.title("💧 AquaIntel Analytics")
+st.markdown("Real-time water quality analysis and prediction system")
 st.markdown(f"**{len(filt):,} records** · Source: {source}")
 
 

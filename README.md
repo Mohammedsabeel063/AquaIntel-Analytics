@@ -2,7 +2,10 @@
 
 A data-driven water quality analytics platform leveraging machine learning and interactive dashboards to deliver real-time environmental insights across multiple regions.
 
-## 📷 Screenshots
+## � Live Demo
+**Try the live application:** [AquaIntel Analytics on Streamlit Cloud](https://aquaintel-analytics-8iksg24xkhtxrnukxsktw7.streamlit.app/)
+
+## �📷 Screenshots
 
 ### 📊 Dashboard Overview
 ![Dashboard](images/dashboard.png)
