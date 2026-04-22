@@ -629,13 +629,71 @@ with tab2:
     st.markdown("### Water Quality Spatial Analysis")
 
     if "latitude" in filt.columns:
-        # Hardcoded premium configuration for clarity
-        selected_basemap = "carto-positron"
-        show_density = True
-        density_radius = 15
-        marker_size = 12
-        enable_animation = True
 
+        # Map configuration - merged controls
+        with st.expander("Map Configuration", expanded=True):
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+            
+            with col1:
+                basemap_style = st.selectbox(
+                    "Basemap",
+                    ["OpenStreetMap", "Carto Positron", "Carto Dark"],
+                    index=0,
+                    key="basemap_selector"
+                )
+            
+            with col2:
+                color_theme = st.selectbox(
+                    "Color Theme",
+                    ["Green-Yellow-Red", "Blue-Purple-Red", "Viridis", "Plasma", "Inferno"],
+                    index=0,
+                    key="color_theme_selector"
+                )
+            
+            with col3:
+                color_mode = st.selectbox(
+                    "Station Color",
+                    ["Safe/Unsafe", "WQI Gradient", "Quality Categories"],
+                    index=0,
+                    key="color_mode_selector"
+                )
+            
+            with col4:
+                show_density = st.checkbox(
+                    "Show Density",
+                    value=True,
+                    key="density_toggle"
+                )
+            
+            st.markdown("")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                density_radius = st.slider("Density Radius", 5, 30, 18, key="density_radius")
+            
+            with col2:
+                marker_size = st.slider("Marker Size", 5, 25, 15, key="marker_size")
+            
+            with col3:
+                enable_animation = st.checkbox("Enable Time Animation", value=True, key="animation_toggle")
+        
+        # Color theme mapping
+        color_themes = {
+            "Green-Yellow-Red": [[0.0, "#27ae60"], [0.5, "#f1c40f"], [1.0, "#e74c3c"]],
+            "Blue-Purple-Red": [[0.0, "#3498db"], [0.5, "#9b59b6"], [1.0, "#e74c3c"]],
+            "Viridis": [[0.0, "#440154"], [0.5, "#21918c"], [1.0, "#fde725"]],
+            "Plasma": [[0.0, "#0d0887"], [0.5, "#cc4778"], [1.0, "#f0f921"]],
+            "Inferno": [[0.0, "#000004"], [0.5, "#b53679"], [1.0, "#fcffa4"]]
+        }
+        selected_colors = color_themes[color_theme]
+        
+        # Map style mapping
+        basemap_map = {
+            "OpenStreetMap": "open-street-map",
+            "Carto Positron": "carto-positron",
+            "Carto Dark": "carto-darkmatter"
+        }
+        selected_basemap = basemap_map[basemap_style]
 
         with st.spinner("Loading spatial data..."):
             map_df = filt.dropna(subset=["latitude", "longitude", "WQI", "water_quality"])
@@ -652,30 +710,160 @@ with tab2:
                 density_df = map_df.sample(min(2000, len(map_df)), random_state=42)
                 scatter_df = map_df.sample(min(1000, len(map_df)), random_state=42)
 
-                # Force Safe/Unsafe color mode
-                scatter_df["status"] = scatter_df["is_safe"].map({1: "Safe", 0: "Unsafe"})
-                color_column = "status"
-                color_discrete_map = {"Safe": "#27ae60", "Unsafe": "#e74c3c"}
-                # Standard vibrant scale for density hotspots
-                selected_colors = [[0.0, "#3498db"], [0.5, "#f1c40f"], [1.0, "#e74c3c"]] 
-                # 1. Density Map (Primary Risk Visualization)
-                with st.spinner("Generating risk density heatmap..."):
-                    fig_density = px.density_mapbox(
-                        density_df,
-                        lat="latitude",
-                        lon="longitude",
-                        z="WQI",
-                        radius=density_radius,
-                        center={"lat": 20.5, "lon": 80},
-                        zoom=4,
-                        mapbox_style="carto-positron",
-                        color_continuous_scale=selected_colors,
-                        title="Water Quality Risk Density (Hotspots)",
-                        labels={"z": "Pollution Level (WQI)"},
-                        opacity=0.8
+                # Density Map with enhanced styling
+                if show_density:
+                    with st.spinner("Generating density heatmap..."):
+                        fig = px.density_mapbox(
+                            density_df,
+                            lat="latitude",
+                            lon="longitude",
+                            z="WQI",
+                            radius=density_radius,
+                            center={"lat": 20.5, "lon": 80},
+                            zoom=4,
+                            mapbox_style="carto-positron",
+                            color_continuous_scale=selected_colors,
+                            title="Water Quality Density Heatmap",
+                            labels={"z": "WQI Index"},
+                            range_color=[density_df["WQI"].min(), density_df["WQI"].max()],
+                            opacity=0.8
+                        )
+                        fig.update_layout(
+                            height=500, 
+                            margin=dict(l=0, r=0, t=30, b=0),
+                            coloraxis_colorbar=dict(title="WQI", x=1.02, len=0.8)
+                        )
+                        fig.update_traces(opacity=0.9)
+                        st.plotly_chart(fig, width='stretch', config={'scrollZoom': True, 'displayModeBar': True, 'displaylogo': False})
+
+                st.markdown("")
+
+                # Scatter Map with enhanced features
+                if color_mode == "Safe/Unsafe":
+                    scatter_df["status"] = scatter_df["is_safe"].map({1: "Safe", 0: "Unsafe"})
+                    color_column = "status"
+                    status_colors = {"Safe": "#27ae60", "Unsafe": "#e74c3c"}
+                    color_discrete_map = status_colors
+                elif color_mode == "WQI Gradient":
+                    color_column = "WQI"
+                    color_discrete_map = None
+                    status_colors = None
+                else:
+                    color_column = "water_quality"
+                    color_discrete_map = get_valid_colors(scatter_df, "water_quality", QUAL_COLORS)
+                    status_colors = None
+
+                with st.spinner("Rendering station map..."):
+                    if color_mode == "WQI Gradient":
+                        fig2 = px.scatter_mapbox(
+                            scatter_df,
+                            lat="latitude",
+                            lon="longitude",
+                            color="WQI",
+                            size="WQI",
+                            size_max=marker_size,
+                            center={"lat": 20.5, "lon": 80},
+                            zoom=4,
+                            mapbox_style=selected_basemap,
+                            title="Water Quality Monitoring Network",
+                            color_continuous_scale=selected_colors,
+                            hover_data={"WQI": ":.2f", "water_quality": True, "state": True}
+                        )
+                    else:
+                        fig2 = px.scatter_mapbox(
+                            scatter_df,
+                            lat="latitude",
+                            lon="longitude",
+                            color=color_column,
+                            color_discrete_map=color_discrete_map,
+                            size="WQI",
+                            size_max=marker_size,
+                            center={"lat": 20.5, "lon": 80},
+                            zoom=4,
+                            mapbox_style=selected_basemap,
+                            title="Water Quality Monitoring Network",
+                            hover_data={"WQI": ":.2f", "water_quality": True, "state": True}
+                        )
+
+                    fig2.update_traces(marker=dict(opacity=0.85), selector=dict(mode='markers'))
+                    fig2.update_layout(
+                        height=500,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        margin=dict(l=0, r=0, t=30, b=0)
                     )
-                    fig_density.update_layout(height=700, margin=dict(l=0, r=0, t=30, b=0))
-                    st.plotly_chart(fig_density, use_container_width=True)
+                    st.plotly_chart(fig2, width='stretch', config={'scrollZoom': True, 'displayModeBar': True, 'displaylogo': False})
+
+                # Enhanced statistics with visual indicators
+                st.markdown("---")
+                st.markdown("### Spatial Analytics Dashboard")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                safe_pct = (len(map_df[map_df["is_safe"] == 1]) / len(map_df)) * 100
+                
+                col1.metric("Total Stations", len(map_df), delta=f"{len(map_df)} locations")
+                col2.metric("Safe Stations", len(map_df[map_df["is_safe"] == 1]), delta=f"{safe_pct:.1f}%")
+                col3.metric("Unsafe Stations", len(map_df[map_df["is_safe"] == 0]), delta=f"{100-safe_pct:.1f}%")
+                col4.metric("Mean WQI", round(map_df["WQI"].mean(), 2), delta=f"Range: {map_df['WQI'].min():.1f}-{map_df['WQI'].max():.1f}")
+
+                # Export with options
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                
+                csv_data = map_df.to_csv(index=False)
+                col1.download_button(
+                    "Download Dataset (CSV)",
+                    data=csv_data,
+                    file_name=f"water_quality_spatial_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    key="export_csv"
+                )
+                
+                col2.markdown(f"**Data Summary:** {len(map_df)} stations across {map_df['state'].nunique()} states")
+
+                # Advanced geospatial analysis
+                st.markdown("---")
+                st.markdown("### Risk Assessment")
+                
+                if len(map_df) > 10:
+                    with st.spinner("Performing spatial analysis..."):
+                        unsafe_df = map_df[map_df["is_safe"] == 0]
+                        
+                        if len(unsafe_df) > 0:
+                            tab_a, tab_b = st.tabs(["High-Risk Areas", "Quality Distribution"])
+                            
+                            with tab_a:
+                                st.markdown("#### States with Most Unsafe Stations")
+                                state_risk = unsafe_df.groupby("state").agg(
+                                    unsafe_count=("is_safe", "count"),
+                                    avg_wqi=("WQI", "mean"),
+                                    max_wqi=("WQI", "max"),
+                                    total_stations=("state", "count")
+                                ).sort_values("unsafe_count", ascending=False).head(10)
+                                state_risk.columns = ["Unsafe Count", "Avg WQI", "Max WQI", "Total Stations"]
+                                st.dataframe(state_risk, width='stretch')
+                                
+                                # Risk level visualization
+                                st.markdown("#### Risk Level Heatmap")
+                                risk_heatmap = state_risk[["Unsafe Count", "Avg WQI"]]
+                                st.dataframe(risk_heatmap, width='stretch')
+                            
+                            with tab_b:
+                                st.markdown("#### Water Quality Distribution")
+                                risk_levels = map_df["water_quality"].value_counts()
+                                
+                                fig_dist = px.pie(
+                                    values=risk_levels.values,
+                                    names=risk_levels.index,
+                                    title="Quality Category Distribution",
+                                    hole=0.4
+                                )
+                                fig_dist.update_traces(textposition='inside', textinfo='percent+label')
+                                fig_dist.update_layout(height=400)
+                                st.plotly_chart(fig_dist, width='stretch', config={'displayModeBar': True, 'displaylogo': False})
+                        else:
+                            st.success("✅ All stations meet safety standards in current view")
+                else:
+                    st.warning("⚠️ Insufficient data for comprehensive analysis")
 
 
 
