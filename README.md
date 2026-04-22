@@ -1,5 +1,21 @@
 # AquaIntel Analytics 🌊
 
+A data-driven water quality analytics platform leveraging machine learning and interactive dashboards to deliver real-time environmental insights across multiple regions.
+
+## 📷 Screenshots
+
+### 📊 Dashboard Overview
+![Dashboard](images/dashboard.png)
+
+### 📈 Data Analysis Visualization
+![Analysis](images/analysis.png)
+
+### 📉 Trend Analysis
+![Trend](images/trend.png)
+
+### 🗺️ Heatmap Visualization
+![Heatmap](images/heatmap.png)
+
 ## 📌 Overview
 AquaIntel Analytics is a data-driven water quality monitoring and prediction platform designed to analyze environmental datasets and identify pollution trends across multiple regions. The system leverages data analysis and machine learning to provide actionable insights for environmental decision-making.
 
@@ -59,16 +75,3 @@ cd AquaIntel-Analytics
 pip install -r requirements.txt
 streamlit run app.py
 
-## 📷 Screenshots
-
-### 📊 Dashboard Overview
-![Dashboard](images/dashboard.png)
-
-### 📈 Data Analysis Visualization
-![Analysis](images/analysis.png)
-
-### 📉 Trend Analysis
-![Trend](images/trend.png)
-
-### 🗺️ Heatmap Visualization
-![Heatmap](images/heatmap.png)
